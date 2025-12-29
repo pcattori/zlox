@@ -1,5 +1,6 @@
 const std = @import("std");
 const repl = @import("repl.zig").repl;
+const script = @import("script.zig").script;
 
 pub fn main() !void {
     var gpa = std.heap.DebugAllocator(.{}).init;
@@ -12,7 +13,7 @@ pub fn main() !void {
     switch (args.len) {
         0 => unreachable,
         1 => try repl(),
-        2 => std.debug.print("script: {s}\n", .{args[1]}),
+        2 => try script(allocator, args[1]),
         else => {
             std.debug.print("Usage: zlox [script]\n", .{});
             std.process.exit(64);
