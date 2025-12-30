@@ -37,7 +37,7 @@ pub const Scanner = struct {
         while (!self.isAtEnd()) {
             self.begin = self.current;
             const char = self.advance();
-            const token: ?Token = switch (char) {
+            return switch (char) {
                 '(' => self.emit(.left_paren),
                 ')' => self.emit(.right_paren),
                 '{' => self.emit(.left_brace),
@@ -66,8 +66,7 @@ pub const Scanner = struct {
                 '0'...'9' => self.number(),
                 'a'...'z', 'A'...'Z', '_' => self.identifier(),
                 else => null,
-            };
-            if (token) |t| return t;
+            } orelse continue;
         }
 
         if (self.current == self.source.len) {
