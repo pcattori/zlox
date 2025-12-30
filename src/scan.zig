@@ -27,6 +27,8 @@ const Token = struct {
         less_equal,
         slash,
 
+        string,
+
         eof,
     };
 };
@@ -68,6 +70,7 @@ pub const Scanner = struct {
                     break :blk self.emit(.slash);
                 },
                 ' ', '\t', '\r', '\n' => null,
+                '"' => try self.string(),
                 else => null,
             };
             if (token) |t| return t;
@@ -78,6 +81,17 @@ pub const Scanner = struct {
             return self.emit(.eof);
         }
 
+        return null;
+    }
+
+    fn string(self: *Self) !?Token {
+        while (!self.isAtEnd()) {
+            const char = self.advance();
+            if (char == '"') {
+                return self.emit(.string);
+            }
+        }
+        try self.diagnostics.add(.{ .begin = self.begin, .end = self.current }, "Unterminated string literal");
         return null;
     }
 
