@@ -28,6 +28,7 @@ const Token = struct {
         slash,
 
         string,
+        number,
 
         eof,
     };
@@ -71,6 +72,7 @@ pub const Scanner = struct {
                 },
                 ' ', '\t', '\r', '\n' => null,
                 '"' => try self.string(),
+                '0'...'9' => self.number(),
                 else => null,
             };
             if (token) |t| return t;
@@ -93,6 +95,21 @@ pub const Scanner = struct {
         }
         try self.diagnostics.add(.{ .begin = self.begin, .end = self.current }, "Unterminated string literal");
         return null;
+    }
+
+    fn number(self: *Self) Token {
+        while (!self.isAtEnd() and isDigit(self.peek())) {
+            _ = self.advance();
+        }
+        if (self.peek() == '.' and isDigit(self.peekNext())) {
+            // consume the `.`
+            _ = self.advance();
+
+            while (isDigit(self.peek())) {
+                _ = self.advance();
+            }
+        }
+        return self.emit(.number);
     }
 
     fn emit(self: *Self, kind: Token.Kind) Token {
@@ -120,7 +137,19 @@ pub const Scanner = struct {
         return self.source[self.current];
     }
 
+    fn peekNext(self: *Self) ?u8 {
+        if (self.current + 1 >= self.source.len) return null;
+        return self.source[self.current + 1];
+    }
+
     fn isAtEnd(self: *Self) bool {
         return self.current >= self.source.len;
     }
 };
+
+fn isDigit(char: ?u8) bool {
+    if (char) |c| {
+        return c >= '0' and c <= '9';
+    }
+    return false;
+}
