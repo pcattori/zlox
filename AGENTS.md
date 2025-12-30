@@ -3,6 +3,17 @@
 **Allocgate**:
 
 - `std.heap.GeneralPurposeAllocator` is deprecated. Use `std.heap.{DebugAllocator}` instead.
+- Managed data structures are deprecated. For example:
+
+    ```zig
+    // Instead of this (deprecated):
+    var list = std.ArrayList(u32).init(allocator);
+    try list.append(42);
+    
+    // Do this:
+    var list: std.ArrayList(u32) = .empty;
+    try list.append(allocator, 42);
+    ```
 
 **Writergate**:
 
