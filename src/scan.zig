@@ -1,3 +1,4 @@
+const std = @import("std");
 const Span = @import("span.zig").Span;
 const Diagnostics = @import("./diagnostics.zig").Diagnostics;
 
@@ -29,9 +30,49 @@ const Token = struct {
 
         string,
         number,
+        identifier,
+
+        kw_and,
+        kw_class,
+        kw_else,
+        kw_false,
+        kw_for,
+        kw_fun,
+        kw_if,
+        kw_nil,
+        kw_or,
+        kw_print,
+        kw_return,
+        kw_super,
+        kw_this,
+        kw_true,
+        kw_var,
+        kw_while,
 
         eof,
     };
+};
+
+const keywords = [_]struct {
+    name: []const u8,
+    kind: Token.Kind,
+}{
+    .{ .name = "and", .kind = .kw_and },
+    .{ .name = "class", .kind = .kw_class },
+    .{ .name = "else", .kind = .kw_else },
+    .{ .name = "false", .kind = .kw_false },
+    .{ .name = "for", .kind = .kw_for },
+    .{ .name = "fun", .kind = .kw_fun },
+    .{ .name = "if", .kind = .kw_if },
+    .{ .name = "nil", .kind = .kw_nil },
+    .{ .name = "or", .kind = .kw_or },
+    .{ .name = "print", .kind = .kw_print },
+    .{ .name = "return", .kind = .kw_return },
+    .{ .name = "super", .kind = .kw_super },
+    .{ .name = "this", .kind = .kw_this },
+    .{ .name = "true", .kind = .kw_true },
+    .{ .name = "var", .kind = .kw_var },
+    .{ .name = "while", .kind = .kw_while },
 };
 
 pub const Scanner = struct {
@@ -73,6 +114,7 @@ pub const Scanner = struct {
                 ' ', '\t', '\r', '\n' => null,
                 '"' => try self.string(),
                 '0'...'9' => self.number(),
+                'a'...'z', 'A'...'Z', '_' => self.identifier(),
                 else => null,
             };
             if (token) |t| return t;
@@ -84,6 +126,22 @@ pub const Scanner = struct {
         }
 
         return null;
+    }
+
+    fn identifier(self: *Self) Token {
+        while (isAlphaNumeric(self.peek())) {
+            _ = self.advance();
+        }
+
+        // keywords
+        const lexeme = self.source[self.begin..self.current];
+        inline for (keywords) |keyword| {
+            if (std.mem.eql(u8, lexeme, keyword.name)) {
+                return self.emit(keyword.kind);
+            }
+        }
+
+        return self.emit(.identifier);
     }
 
     fn string(self: *Self) !?Token {
@@ -150,6 +208,20 @@ pub const Scanner = struct {
 fn isDigit(char: ?u8) bool {
     if (char) |c| {
         return c >= '0' and c <= '9';
+    }
+    return false;
+}
+
+fn isAlpha(char: ?u8) bool {
+    if (char) |c| {
+        return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_';
+    }
+    return false;
+}
+
+fn isAlphaNumeric(char: ?u8) bool {
+    if (char) |c| {
+        return isAlpha(c) or isDigit(c);
     }
     return false;
 }
