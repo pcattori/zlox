@@ -1,83 +1,80 @@
 const std = @import("std");
 
-const Diagnostics = @import("./diagnostics.zig").Diagnostics;
+const Diagnostic = @import("./diagnostic.zig").Diagnostic;
 const Token = @import("token.zig").Token;
 
-const keywords = [_]struct {
-    name: []const u8,
-    kind: Token.Kind,
-}{
-    .{ .name = "and", .kind = .kw_and },
-    .{ .name = "class", .kind = .kw_class },
-    .{ .name = "else", .kind = .kw_else },
-    .{ .name = "false", .kind = .kw_false },
-    .{ .name = "for", .kind = .kw_for },
-    .{ .name = "fun", .kind = .kw_fun },
-    .{ .name = "if", .kind = .kw_if },
-    .{ .name = "nil", .kind = .kw_nil },
-    .{ .name = "or", .kind = .kw_or },
-    .{ .name = "print", .kind = .kw_print },
-    .{ .name = "return", .kind = .kw_return },
-    .{ .name = "super", .kind = .kw_super },
-    .{ .name = "this", .kind = .kw_this },
-    .{ .name = "true", .kind = .kw_true },
-    .{ .name = "var", .kind = .kw_var },
-    .{ .name = "while", .kind = .kw_while },
-};
+pub fn scan(allocator: std.mem.Allocator, source: []const u8, diagnostics: *std.ArrayList(Diagnostic)) ![]const Token {
+    var scanner = Scanner.init(allocator, source, diagnostics);
+    defer scanner.deinit();
+    return scanner.scan();
+}
 
-pub const Scanner = struct {
+const Scanner = struct {
+    allocator: std.mem.Allocator,
     source: []const u8,
+    diagnostics: *std.ArrayList(Diagnostic),
+
+    tokens: std.ArrayList(Token),
+
     begin: u32 = 0,
     current: u32 = 0,
-    diagnostics: *Diagnostics,
 
     const Self = @This();
 
-    pub fn next(self: *Self) !?Token {
+    fn init(allocator: std.mem.Allocator, source: []const u8, diagnostics: *std.ArrayList(Diagnostic)) Self {
+        return .{
+            .allocator = allocator,
+            .source = source,
+            .diagnostics = diagnostics,
+            .tokens = .empty,
+        };
+    }
+
+    fn deinit(self: *Self) void {
+        self.tokens.deinit(self.allocator);
+    }
+
+    fn scan(self: *Self) ![]const Token {
         while (!self.isAtEnd()) {
             self.begin = self.current;
             const char = self.advance();
-            return switch (char) {
-                '(' => self.emit(.left_paren),
-                ')' => self.emit(.right_paren),
-                '{' => self.emit(.left_brace),
-                '}' => self.emit(.right_brace),
-                ',' => self.emit(.comma),
-                '.' => self.emit(.dot),
-                '-' => self.emit(.minus),
-                '+' => self.emit(.plus),
-                ';' => self.emit(.semicolon),
-                '*' => self.emit(.star),
-                '!' => self.emit(if (self.match('=')) .bang_equal else .bang),
-                '=' => self.emit(if (self.match('=')) .equal_equal else .equal),
-                '<' => self.emit(if (self.match('=')) .less_equal else .less),
-                '>' => self.emit(if (self.match('=')) .greater_equal else .greater),
-                '/' => blk: {
+            switch (char) {
+                '(' => try self.add(.left_paren),
+                ')' => try self.add(.right_paren),
+                '{' => try self.add(.left_brace),
+                '}' => try self.add(.right_brace),
+                ',' => try self.add(.comma),
+                '.' => try self.add(.dot),
+                '-' => try self.add(.minus),
+                '+' => try self.add(.plus),
+                ';' => try self.add(.semicolon),
+                '*' => try self.add(.star),
+                '!' => try self.add(if (self.match('=')) .bang_equal else .bang),
+                '=' => try self.add(if (self.match('=')) .equal_equal else .equal),
+                '<' => try self.add(if (self.match('=')) .less_equal else .less),
+                '>' => try self.add(if (self.match('=')) .greater_equal else .greater),
+                '/' => {
                     if (self.match('/')) {
                         while (!self.isAtEnd() and self.peek() != '\n') {
                             _ = self.advance();
                         }
-                        break :blk null;
+                        continue;
                     }
-                    break :blk self.emit(.slash);
+                    try self.add(.slash);
                 },
-                ' ', '\t', '\r', '\n' => null,
                 '"' => try self.string(),
-                '0'...'9' => self.number(),
-                'a'...'z', 'A'...'Z', '_' => self.identifier(),
-                else => null,
-            } orelse continue;
+                '0'...'9' => try self.number(),
+                'a'...'z', 'A'...'Z', '_' => try self.identifier(),
+                ' ', '\t', '\r', '\n' => continue,
+                else => continue,
+            }
         }
+        try self.add(.eof);
 
-        if (self.current == self.source.len) {
-            self.current += 1;
-            return self.emit(.eof);
-        }
-
-        return null;
+        return self.tokens.toOwnedSlice(self.allocator);
     }
 
-    fn identifier(self: *Self) Token {
+    fn identifier(self: *Self) !void {
         while (isAlphaNumeric(self.peek())) {
             _ = self.advance();
         }
@@ -86,25 +83,27 @@ pub const Scanner = struct {
         const lexeme = self.source[self.begin..self.current];
         inline for (keywords) |keyword| {
             if (std.mem.eql(u8, lexeme, keyword.name)) {
-                return self.emit(keyword.kind);
+                return self.add(keyword.kind);
             }
         }
 
-        return self.emit(.identifier);
+        return self.add(.identifier);
     }
 
-    fn string(self: *Self) !?Token {
+    fn string(self: *Self) !void {
         while (!self.isAtEnd()) {
             const char = self.advance();
             if (char == '"') {
-                return self.emit(.string);
+                return self.add(.string);
             }
         }
-        try self.diagnostics.add(.{ .begin = self.begin, .end = self.current }, "Unterminated string literal");
-        return null;
+        try self.diagnostics.append(self.allocator, .{ .message = "Unterminated string literal", .span = .{
+            .begin = self.begin,
+            .end = self.current,
+        } });
     }
 
-    fn number(self: *Self) Token {
+    fn number(self: *Self) !void {
         while (!self.isAtEnd() and isDigit(self.peek())) {
             _ = self.advance();
         }
@@ -116,14 +115,15 @@ pub const Scanner = struct {
                 _ = self.advance();
             }
         }
-        return self.emit(.number);
+        return self.add(.number);
     }
 
-    fn emit(self: *Self, kind: Token.Kind) Token {
+    fn add(self: *Self, kind: Token.Kind) !void {
         const begin = self.begin;
         const end = self.current;
         self.begin = end; // todo: is this redundant with `next`?
-        return .{ .kind = kind, .span = .{ .begin = begin, .end = end } };
+
+        try self.tokens.append(self.allocator, .{ .kind = kind, .span = .{ .begin = begin, .end = end } });
     }
 
     fn match(self: *Self, expected: u8) bool {
@@ -174,3 +174,25 @@ fn isAlphaNumeric(char: ?u8) bool {
     }
     return false;
 }
+
+const keywords = [_]struct {
+    name: []const u8,
+    kind: Token.Kind,
+}{
+    .{ .name = "and", .kind = ._and },
+    .{ .name = "class", .kind = ._class },
+    .{ .name = "else", .kind = ._else },
+    .{ .name = "false", .kind = ._false },
+    .{ .name = "for", .kind = ._for },
+    .{ .name = "fun", .kind = ._fun },
+    .{ .name = "if", .kind = ._if },
+    .{ .name = "nil", .kind = ._nil },
+    .{ .name = "or", .kind = ._or },
+    .{ .name = "print", .kind = ._print },
+    .{ .name = "return", .kind = ._return },
+    .{ .name = "super", .kind = ._super },
+    .{ .name = "this", .kind = ._this },
+    .{ .name = "true", .kind = ._true },
+    .{ .name = "var", .kind = ._var },
+    .{ .name = "while", .kind = ._while },
+};
