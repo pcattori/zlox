@@ -1,37 +1,29 @@
 const std = @import("std");
 
-const Diagnostic = @import("./diagnostic.zig").Diagnostic;
+const Compilation = @import("compilation.zig").Compilation;
 const Token = @import("token.zig").Token;
 
-pub fn scan(allocator: std.mem.Allocator, source: []const u8, diagnostics: *std.ArrayList(Diagnostic)) ![]const Token {
-    var scanner = Scanner.init(allocator, source, diagnostics);
+pub fn scan(ctx: *Compilation) ![]const Token {
+    var scanner = Scanner.init(ctx);
     defer scanner.deinit();
     return scanner.scan();
 }
 
 const Scanner = struct {
-    allocator: std.mem.Allocator,
-    source: []const u8,
-    diagnostics: *std.ArrayList(Diagnostic),
+    ctx: *Compilation,
 
     tokens: std.ArrayList(Token),
-
     begin: u32 = 0,
     current: u32 = 0,
 
     const Self = @This();
 
-    fn init(allocator: std.mem.Allocator, source: []const u8, diagnostics: *std.ArrayList(Diagnostic)) Self {
-        return .{
-            .allocator = allocator,
-            .source = source,
-            .diagnostics = diagnostics,
-            .tokens = .empty,
-        };
+    fn init(ctx: *Compilation) Self {
+        return .{ .ctx = ctx, .tokens = .empty };
     }
 
     fn deinit(self: *Self) void {
-        self.tokens.deinit(self.allocator);
+        self.tokens.deinit(self.ctx.allocator);
     }
 
     fn scan(self: *Self) ![]const Token {
@@ -71,7 +63,7 @@ const Scanner = struct {
         }
         try self.add(.eof);
 
-        return self.tokens.toOwnedSlice(self.allocator);
+        return self.tokens.toOwnedSlice(self.ctx.allocator);
     }
 
     fn identifier(self: *Self) !void {
@@ -80,7 +72,7 @@ const Scanner = struct {
         }
 
         // keywords
-        const lexeme = self.source[self.begin..self.current];
+        const lexeme = self.ctx.source[self.begin..self.current];
         inline for (keywords) |keyword| {
             if (std.mem.eql(u8, lexeme, keyword.name)) {
                 return self.add(keyword.kind);
@@ -97,10 +89,10 @@ const Scanner = struct {
                 return self.add(.string);
             }
         }
-        try self.diagnostics.append(self.allocator, .{ .message = "Unterminated string literal", .span = .{
-            .begin = self.begin,
-            .end = self.current,
-        } });
+        try self.ctx.addDiagnostic(
+            .{ .begin = self.begin, .end = self.current },
+            "Unterminated string literal",
+        );
     }
 
     fn number(self: *Self) !void {
@@ -123,34 +115,33 @@ const Scanner = struct {
         const end = self.current;
         self.begin = end; // todo: is this redundant with `next`?
 
-        try self.tokens.append(self.allocator, .{ .kind = kind, .span = .{ .begin = begin, .end = end } });
+        try self.tokens.append(self.ctx.allocator, .{ .kind = kind, .span = .{ .begin = begin, .end = end } });
     }
 
     fn match(self: *Self, expected: u8) bool {
-        if (self.isAtEnd()) return false;
-        if (self.source[self.current] != expected) return false;
+        if (self.peek() != expected) return false;
         self.current += 1;
         return true;
     }
 
     fn advance(self: *Self) u8 {
-        const char = self.source[self.current];
+        const char = self.ctx.source[self.current];
         self.current += 1;
         return char;
     }
 
     fn peek(self: *Self) ?u8 {
         if (self.isAtEnd()) return null;
-        return self.source[self.current];
+        return self.ctx.source[self.current];
     }
 
     fn peekNext(self: *Self) ?u8 {
-        if (self.current + 1 >= self.source.len) return null;
-        return self.source[self.current + 1];
+        if (self.current + 1 >= self.ctx.source.len) return null;
+        return self.ctx.source[self.current + 1];
     }
 
     fn isAtEnd(self: *Self) bool {
-        return self.current >= self.source.len;
+        return self.current >= self.ctx.source.len;
     }
 };
 
