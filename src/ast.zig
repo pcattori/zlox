@@ -9,6 +9,24 @@ pub const Expr = union(enum) {
     grouping: *Expr,
     unary: Unary,
     binary: Binary,
+
+    pub fn format(self: Expr, w: *std.Io.Writer) std.Io.Writer.Error!void {
+        switch (self) {
+            .number => |n| try w.print("{d}", .{n}),
+            .string => |s| try w.print("\"{s}\"", .{s}),
+            .boolean => |b| try w.print("{s}", .{if (b) "true" else "false"}),
+            .nil => try w.writeAll("nil"),
+
+            .grouping => |expr| {
+                try w.writeAll("(group ");
+                try expr.format(w);
+                try w.writeAll(")");
+            },
+
+            .unary => |u| try u.format(w),
+            .binary => |b| try b.format(w),
+        }
+    }
 };
 
 pub const Unary = struct {
@@ -19,6 +37,17 @@ pub const Unary = struct {
         minus,
         bang,
     };
+
+    fn format(self: Unary, w: *std.Io.Writer) std.Io.Writer.Error!void {
+        try w.writeAll("(");
+        const op = switch (self.operator) {
+            .minus => "-",
+            .bang => "!",
+        };
+        try w.print("{s} ", .{op});
+        try self.expression.format(w);
+        try w.writeAll(")");
+    }
 };
 
 pub const Binary = struct {
@@ -38,4 +67,25 @@ pub const Binary = struct {
         equal_equal,
         bang_equal,
     };
+
+    fn format(self: Binary, w: *std.Io.Writer) std.Io.Writer.Error!void {
+        try w.writeAll("(");
+        const op = switch (self.operator) {
+            .plus => "+",
+            .minus => "-",
+            .star => "*",
+            .slash => "/",
+            .greater => ">",
+            .greater_equal => ">=",
+            .less => "<",
+            .less_equal => "<=",
+            .equal_equal => "==",
+            .bang_equal => "!=",
+        };
+        try w.print("{s} ", .{op});
+        try self.left.format(w);
+        try w.writeAll(" ");
+        try self.right.format(w);
+        try w.writeAll(")");
+    }
 };
