@@ -51,6 +51,7 @@ const Parser = struct {
     }
 
     fn parse(self: *Self) ParseError!Parsed {
+        errdefer self.arena.deinit();
         const program = try self.expression();
         return .{
             .arena = self.arena,
