@@ -1,17 +1,17 @@
 const std = @import("std");
 
 const Span = @import("span.zig").Span;
-const Compilation = @import("compilation.zig").Compilation;
+const Context = @import("context.zig").Context;
 const Token = @import("token.zig").Token;
 
-pub fn scan(ctx: *Compilation) ![]const Token {
+pub fn scan(ctx: *Context) ![]const Token {
     var scanner = Scanner.init(ctx);
     defer scanner.deinit();
     return scanner.scan();
 }
 
 const Scanner = struct {
-    ctx: *Compilation,
+    ctx: *Context,
 
     tokens: std.ArrayList(Token),
     begin: u32 = 0,
@@ -19,7 +19,7 @@ const Scanner = struct {
 
     const Self = @This();
 
-    fn init(ctx: *Compilation) Self {
+    fn init(ctx: *Context) Self {
         return .{ .ctx = ctx, .tokens = .empty };
     }
 
@@ -62,7 +62,7 @@ const Scanner = struct {
                 else => {
                     const message = "Unrecognized character(s)";
 
-                    const diagnostics = self.ctx.getErrors();
+                    const diagnostics = self.ctx.errors.items;
                     const last = &diagnostics[diagnostics.len - 1];
 
                     if (std.mem.eql(u8, last.message, message)) {

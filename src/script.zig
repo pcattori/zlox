@@ -1,21 +1,21 @@
 const std = @import("std");
-const Compilation = @import("./compilation.zig").Compilation;
-const scan = @import("./scan.zig").scan;
+const ParseContext = @import("parse.zig").Context;
+const parse = @import("parse.zig").parse;
 
 pub fn script(allocator: std.mem.Allocator, path: []const u8) !void {
     const source = try std.fs.cwd().readFileAlloc(allocator, path, std.math.maxInt(u32));
     defer allocator.free(source);
 
-    var ctx = Compilation.init(allocator, source);
+    var ctx = ParseContext.init(allocator, source);
     defer ctx.deinit();
 
-    const tokens = try scan(&ctx);
-    defer allocator.free(tokens);
+    var ast = try parse(&ctx);
+    defer ast.deinit();
 
-    for (tokens) |token| {
-        std.debug.print("{any}\n", .{token.kind});
-    }
-    for (ctx.errors.items) |err| {
-        std.debug.print("error: {s}\n", .{err.message});
+    if (ctx.errors.items.len > 0) {
+        for (ctx.errors.items) |err| {
+            std.debug.print("error: {s}\n", .{err.message});
+        }
+        return;
     }
 }

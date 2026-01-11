@@ -1,11 +1,11 @@
 const std = @import("std");
-const Compilation = @import("compilation.zig").Compilation;
+const Context = @import("parse.zig").Context;
 const parse = @import("parse.zig").parse;
 
 const allocator = std.testing.allocator;
 
 fn expectParse(source: []const u8, expected: []const u8) !void {
-    var ctx = Compilation.init(allocator, source);
+    var ctx = Context.init(allocator, source);
     defer ctx.deinit();
 
     var ast = try parse(&ctx);

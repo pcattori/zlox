@@ -1,17 +1,17 @@
 const std = @import("std");
 
-const Compilation = @import("compilation.zig").Compilation;
-const Token = @import("token.zig").Token;
 const Ast = @import("ast.zig");
-const scan = @import("scan.zig").scan;
+pub const Context = @import("parse/context.zig").Context;
+const Token = @import("parse/token.zig").Token;
+const scan = @import("parse/scan.zig").scan;
 
-pub fn parse(ctx: *Compilation) !Parsed {
+pub fn parse(ctx: *Context) !Parsed {
     const tokens = try scan(ctx);
     defer ctx.allocator.free(tokens);
     return parseTokens(ctx, tokens);
 }
 
-pub fn parseTokens(ctx: *Compilation, tokens: []const Token) !Parsed {
+pub fn parseTokens(ctx: *Context, tokens: []const Token) !Parsed {
     var parser = Parser.init(ctx, tokens);
     return parser.parse();
 }
@@ -34,7 +34,7 @@ const Parsed = struct {
 };
 
 const Parser = struct {
-    ctx: *Compilation,
+    ctx: *Context,
     tokens: []const Token,
 
     arena: std.heap.ArenaAllocator,
@@ -42,7 +42,7 @@ const Parser = struct {
 
     const Self = @This();
 
-    fn init(ctx: *Compilation, tokens: []const Token) Self {
+    fn init(ctx: *Context, tokens: []const Token) Self {
         return .{
             .ctx = ctx,
             .tokens = tokens,

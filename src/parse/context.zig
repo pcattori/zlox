@@ -2,7 +2,7 @@ const std = @import("std");
 const Span = @import("span.zig").Span;
 const Token = @import("token.zig").Token;
 
-pub const Compilation = struct {
+pub const Context = struct {
     allocator: std.mem.Allocator,
     source: []const u8,
     errors: std.ArrayList(Error),
@@ -23,10 +23,6 @@ pub const Compilation = struct {
 
     pub fn err(self: *Self, span: Span, message: []const u8) !void {
         try self.errors.append(self.allocator, .{ .span = span, .message = message });
-    }
-
-    pub fn getErrors(self: *Self) []Error {
-        return self.errors.items;
     }
 };
 
