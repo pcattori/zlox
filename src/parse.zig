@@ -21,7 +21,7 @@ const ParseError = error{
     UnexpectedToken,
     InvalidCharacter,
 
-    ZloxParserPanic,
+    ZloxParsePanic,
 };
 
 const Parsed = struct {
@@ -165,19 +165,19 @@ const Parser = struct {
         // grouping
         if (self.match(.left_paren)) |_| {
             const expr = try self.expression();
-            _ = try self.consume(.right_paren);
+            _ = try self.consume(.right_paren, "Expect ')' after expression");
             return self.box(Ast.Expr, .{ .grouping = expr });
         }
 
-        // todo: self.diagnostics.add(span: Span, message: []const u8)
-        return error.ZloxParserPanic;
+        try self.ctx.err(self.peek().span, "Expect expression");
+        return error.ZloxParsePanic;
     }
 
-    fn consume(self: *Self, comptime kind: Token.Kind) !?Token {
+    fn consume(self: *Self, kind: Token.Kind, message: []const u8) !?Token {
         const token = self.advance();
         if (token.kind == kind) return token;
-        try self.ctx.addDiagnostic(token.span, "wow");
-        return error.ZloxParserPanic;
+        try self.ctx.err(token.span, message);
+        return error.ZloxParsePanic;
     }
 
     fn match(self: *Self, comptime kind: Token.Kind) ?Token {

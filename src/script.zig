@@ -15,7 +15,7 @@ pub fn script(allocator: std.mem.Allocator, path: []const u8) !void {
     for (tokens) |token| {
         std.debug.print("{any}\n", .{token.kind});
     }
-    for (ctx.diagnostics.items) |diagnostic| {
-        std.debug.print("diagnostic: {s}\n", .{diagnostic.message});
+    for (ctx.errors.items) |err| {
+        std.debug.print("error: {s}\n", .{err.message});
     }
 }

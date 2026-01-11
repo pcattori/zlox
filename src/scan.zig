@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const Span = @import("span.zig").Span;
 const Compilation = @import("compilation.zig").Compilation;
 const Token = @import("token.zig").Token;
 
@@ -58,7 +59,18 @@ const Scanner = struct {
                 '0'...'9' => try self.number(),
                 'a'...'z', 'A'...'Z', '_' => try self.identifier(),
                 ' ', '\t', '\r', '\n' => continue,
-                else => continue,
+                else => {
+                    const message = "Unrecognized character(s)";
+
+                    const diagnostics = self.ctx.getErrors();
+                    const last = &diagnostics[diagnostics.len - 1];
+
+                    if (std.mem.eql(u8, last.message, message)) {
+                        last.span.end = self.span().end;
+                    } else {
+                        try self.ctx.err(self.span(), message);
+                    }
+                },
             }
         }
         try self.add(.eof);
@@ -89,10 +101,7 @@ const Scanner = struct {
                 return self.add(.string);
             }
         }
-        try self.ctx.addDiagnostic(
-            .{ .begin = self.begin, .end = self.current },
-            "Unterminated string literal",
-        );
+        try self.ctx.err(self.span(), "Unterminated string");
     }
 
     fn number(self: *Self) !void {
@@ -142,6 +151,13 @@ const Scanner = struct {
 
     fn isAtEnd(self: *Self) bool {
         return self.current >= self.ctx.source.len;
+    }
+
+    fn span(self: *Self) Span {
+        const begin = self.begin;
+        const end = self.current;
+
+        return .{ .begin = begin, .end = end };
     }
 };
 
